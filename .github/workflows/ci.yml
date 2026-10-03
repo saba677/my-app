@@ -1,4 +1,4 @@
-name: CI Workflow
+name: CI Workflow with Caching
 
 on:
   push:
@@ -19,7 +19,18 @@ jobs:
         with:
           node-version: '18'
 
+      - name: Cache node modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install Dependencies
+        run: npm install
+
       - name: Run CI Test Script
         run: |
-          echo "Repository checked out successfully!"
-          echo "Running dummy build & test..."
+          echo "Dependencies installed and cached successfully!"
+          npm test
