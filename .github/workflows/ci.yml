@@ -1,45 +1,18 @@
-name: Multi-Job CI/CD with Docker & GHCR
+name: Multi-Environment CI/CD with Manual Approval
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
 
 permissions:
   contents: read
   packages: write
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry (GHCR)
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/my-app:latest
-            ghcr.io/${{ github.repository_owner }}/my-app:${{ github.sha }}
-
-  test:
-    runs-on: ubuntu-latest
-    needs: build
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -54,12 +27,23 @@ jobs:
           echo "Running automated test suite..."
           npm test
 
-  deploy:
+  deploy-staging:
     runs-on: ubuntu-latest
-    needs: test
+    needs: build-and-test
+    environment: staging
+    steps:
+      - name: Deploy to Staging
+        run: |
+          echo "Deploying application to STAGING environment..."
+          echo "Staging deployment successful!"
+
+  deploy-production:
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    environment: production
     if: github.ref == 'refs/heads/main'
     steps:
       - name: Deploy to Production
         run: |
-          echo "Deploying Docker container from ghcr.io..."
-          echo "Deployment successful!"
+          echo "Deploying application to PRODUCTION environment..."
+          echo "Production deployment successful!"
