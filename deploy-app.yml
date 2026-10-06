@@ -1,0 +1,39 @@
+---
+- name: Build Docker Image on Control Node
+  hosts: localhost
+  connection: local
+  vars:
+    image_name: "my-app"
+    image_tag: "latest"
+
+  tasks:
+    - name: Build Docker Image from Dockerfile
+      community.docker.docker_image:
+        name: "{{ image_name }}"
+        tag: "{{ image_tag }}"
+        build:
+          path: "{{ playbook_dir }}"
+        source: build
+
+- name: Deploy Container on Target Hosts
+  hosts: webservers
+  become: true
+  vars:
+    image_name: "my-app"
+    image_tag: "latest"
+    container_name: "my-app-container"
+
+  tasks:
+    - name: Stop and Remove Old Container (if exists)
+      community.docker.docker_container:
+        name: "{{ container_name }}"
+        state: absent
+
+    - name: Deploy New Docker Container
+      community.docker.docker_container:
+        name: "{{ container_name }}"
+        image: "{{ image_name }}:{{ image_tag }}"
+        state: started
+        restart_policy: always
+        published_ports:
+          - "8080:80"

@@ -1,0 +1,141 @@
+Script started on 2026-10-06 23:34:46+05:00 [TERM="xterm" TTY="/dev/pts/2" COLUMNS="126" LINES="31"]
+[?2004h]0;sabachaudhry@sisyphus-workspace: ~/ansible-docker-appsabachaudhry@sisyphus-workspace:~/ansible-docker-app$ cat << 'EOF' > Jenkinsfile
+pipeline {
+    agent any
+
+    environment {
+        REGISTRY_USER = 'your_dockerhub_username'
+        IMAGE_NAME    = 'my-app'
+        REGISTRY_CRED = 'dockerhub-credentials-id'
+    }
+
+    stages {
+        stage('Checkout Source Code') {
+            steps {
+                checkout scm
+                script {
+                    GIT_SHA = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+                    echo "Building for Git Commit SHA: ${GIT_SHA}"
+[7m                }[27m
+[7m            }[27m
+[7m        }[27m
+
+[7m        stage('Build Docker Image') {[27m
+[7m            steps {[27m
+[7m                script {[27m
+[7m                    dockerImage = docker.build("${REGISTRY_USER}/${IMAGE_NAME}:${GIT_SHA}")[27m
+[7m                }[27m
+[7m            }[27m
+[7m        }[27m
+
+[7m        stage('Push Image to Registry') {[27m
+[7m            steps {[27m
+[7m                script {[27m[7m                    docker.withRegistry('https://index.docker.io/v1/', "${REGISTRY_CRED}") {[27m[7m                        dockerImage.push("${GIT_SHA}")[27m[7m                        dockerImage.push("latest")[27m[7m                    }[27m[7m                }[27m[7m            }[27m[7m        }[27m[7m    }[27m[7m    post {[27m[7m        always {[27m[7m            sh "docker rmi ${REGISTRY_USER}/${IMAGE_NAME}:${GIT_SHA} || true"[27m[7m        }[27m[7m    }[27m[7m}[27m[7mEOF[27m[A[A[A[A[A[A[A[A[A[A[A[A[A[A                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    dockerImage = docker.build("${REGISTRY_USER}/${IMAGE_NAME}:${GIT_SHA}")
+                }
+            }
+        }
+
+        stage('Push Image to Registry') {
+            steps {
+                script {                    docker.withRegistry('https://index.docker.io/v1/', "${REGISTRY_CRED}") {                        dockerImage.push("${GIT_SHA}")                        dockerImage.push("latest")                    }                }            }        }    }    post {        always {            sh "docker rmi ${REGISTRY_USER}/${IMAGE_NAME}:${GIT_SHA} || true"        }    }}EOF
+[?2004l[?2004h]0;sabachaudhry@sisyphus-workspace: ~/ansible-docker-appsabachaudhry@sisyphus-workspace:~/ansible-docker-app$ [7mcat Jenkinsfile[27mcat Jenkinsfile
+[?2004lpipeline {
+    agent any
+
+    environment {
+        REGISTRY_USER = 'your_dockerhub_username'
+        IMAGE_NAME    = 'my-app'
+        REGISTRY_CRED = 'dockerhub-credentials-id'
+    }
+
+    stages {
+        stage('Checkout Source Code') {
+            steps {
+                checkout scm
+                script {
+                    GIT_SHA = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+                    echo "Building for Git Commit SHA: ${GIT_SHA}"
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    dockerImage = docker.build("${REGISTRY_USER}/${IMAGE_NAME}:${GIT_SHA}")
+                }
+            }
+        }
+
+        stage('Push Image to Registry') {
+            steps {
+                script {
+                    docker.withRegistry('https://index.docker.io/v1/', "${REGISTRY_CRED}") {
+                        dockerImage.push("${GIT_SHA}")
+                        dockerImage.push("latest")
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            sh "docker rmi ${REGISTRY_USER}/${IMAGE_NAME}:${GIT_SHA} || true"
+        }
+    }
+}
+[?2004h]0;sabachaudhry@sisyphus-workspace: ~/ansible-docker-appsabachaudhry@sisyphus-workspace:~/ansible-docker-app$ mkdir -p .github/workflows
+cat << 'EOF' > .github/workflows/docker-build.yml
+name: Build and Push Docker Image to GHCR
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches:
+      - main
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+[7m        uses: actions/checkout@v4[27m
+
+[7m      - name: Log in to GitHub Container Registry[27m
+[7m        uses: docker/login-action@v3[27m[7m        with:[27m[7m          registry: ${{ env.REGISTRY }}[27m[7m          username: ${{ github.actor }}[27m[7m          password: ${{ secrets.GITHUB_TOKEN }}[27m[7m      - name: Extract Docker metadata (Tags & Labels)[27m[7m        id: meta[27m[7m        uses: docker/metadata-action@v5[27m[7m        with:[27m[7m          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}[27m[7m          tags: |[27m[7m            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}[27m[7m            type=ref,event=branch[27m[7m            type=semver,pattern={{version}}[27m[7m            type=sha,prefix=sha-,format=short[27m[7m      - name: Set up Docker Buildx[27m[7m        uses: docker/setup-buildx-action@v3[27m[7m      - name: Build and push Docker image[27m[7m        uses: docker/build-push-action@v6[27m[7m        with:[27m[7m          context: .[27m[7m          push: ${{ github.event_name != 'pull_request' }}[27m[7m          tags: ${{ steps.meta.outputs.tags }}[27m[7m          labels: ${{ steps.meta.outputs.labels }}[27m[7mEOF[27m[A[A[A        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3        with:          registry: ${{ env.REGISTRY }}          username: ${{ github.actor }}          password: ${{ secrets.GITHUB_TOKEN }}      - name: Extract Docker metadata (Tags & Labels)        id: meta        uses: docker/metadata-action@v5        with:          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}          tags: |            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}            type=ref,event=branch            type=semver,pattern={{version}}            type=sha,prefix=sha-,format=short      - name: Set up Docker Buildx        uses: docker/setup-buildx-action@v3      - name: Build and push Docker image        uses: docker/build-push-action@v6        with:          context: .          push: ${{ github.event_name != 'pull_request' }}          tags: ${{ steps.meta.outputs.tags }}          labels: ${{ steps.meta.outputs.labels }}EOF
+[?2004l[?2004h]0;sabachaudhry@sisyphus-workspace: ~/ansible-docker-appsabachaudhry@sisyphus-workspace:~/ansible-docker-app$ [7mgit add .github/workflows/docker-build.yml[27m
+[7mgit commit -m "ci: add GitHub Actions workflow for GHCR image build and push"[27m
+[7mgit push origin main[27m[A[A]0;sabachaudhry@sisyphus-workspace: ~/ansible-docker-appsabachaudhry@sisyphus-workspace:~/ansible-docker-app$ git add .github/workflows/docker-build.yml
+git commit -m "ci: add GitHub Actions workflow for GHCR image build and push"
+git push origin main
+[?2004lfatal: not a git repository (or any of the parent directories): .git
+fatal: not a git repository (or any of the parent directories): .git
+fatal: not a git repository (or any of the parent directories): .git
+[?2004h]0;sabachaudhry@sisyphus-workspace: ~/ansible-docker-appsabachaudhry@sisyphus-workspace:~/ansible-docker-app$ [7mgit init[27m
+[7mgit branch -M main[27m[A]0;sabachaudhry@sisyphus-workspace: ~/ansible-docker-appsabachaudhry@sisyphus-workspace:~/ansible-docker-app$ git init
+git branch -M main
+[?2004l[33mhint: Using 'master' as the name for the initial branch. This 

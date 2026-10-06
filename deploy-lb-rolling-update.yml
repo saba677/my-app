@@ -1,0 +1,65 @@
+---
+- name: Build Docker Image Locally
+  hosts: localhost
+  connection: local
+  vars:
+    image_name: "my-app"
+    image_tag: "v3"
+
+  tasks:
+    - name: Build New Docker Image Version
+      community.docker.docker_image:
+        name: "{{ image_name }}"
+        tag: "{{ image_tag }}"
+        build:
+          path: "{{ playbook_dir }}"
+        source: build
+
+- name: Load Balancer Integrated Rolling Update
+  hosts: webservers
+  become: true
+  serial: 1
+  vars:
+    image_name: "my-app"
+    image_tag: "v3"
+    container_name: "my-app-container"
+    app_port: 8080
+
+  tasks:
+    - name: 1. Remove Host from Load Balancer Pool
+      ansible.builtin.debug:
+        msg: "Draining traffic: Removing {{ inventory_hostname }} from Load Balancer target group/pool..."
+
+    - name: Update Container and Verify Health
+      block:
+        - name: 2. Stop and Remove Existing Container
+          community.docker.docker_container:
+            name: "{{ container_name }}"
+            state: absent
+
+        - name: 3. Deploy New Docker Container Version
+          community.docker.docker_container:
+            name: "{{ container_name }}"
+            image: "{{ image_name }}:{{ image_tag }}"
+            state: started
+            restart_policy: always
+            published_ports:
+              - "{{ app_port }}:80"
+
+        - name: 4. Health Check - Verify Container Endpoint
+          ansible.builtin.uri:
+            url: "http://localhost:{{ app_port }}"
+            status_code: 200
+          register: health_check_result
+          until: health_check_result.status == 200
+          retries: 5
+          delay: 3
+
+        - name: 5. Re-add Host to Load Balancer Pool
+          ansible.builtin.debug:
+            msg: "Health check PASSED! Re-adding {{ inventory_hostname }} back to Load Balancer active pool."
+
+      rescue:
+        - name: Handle Deployment Failure
+          ansible.builtin.fail:
+            msg: "Health check failed for {{ inventory_hostname }}. Host kept isolated from Load Balancer!"

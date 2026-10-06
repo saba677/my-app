@@ -1,0 +1,49 @@
+---
+- name: Rollback Application to Previous Version
+  hosts: webservers
+  become: true
+  serial: 1
+  vars:
+    image_name: "my-app"
+    rollback_tag: "v2"
+    container_name: "my-app-container"
+    app_port: 8080
+
+  tasks:
+    - name: 1. Remove Host from Load Balancer Pool
+      ansible.builtin.debug:
+        msg: "Draining traffic: Temporarily removing {{ inventory_hostname }} from Load Balancer for rollback..."
+
+    - name: Revert Container Version and Verify Health
+      block:
+        - name: 2. Stop and Remove Current Container
+          community.docker.docker_container:
+            name: "{{ container_name }}"
+            state: absent
+
+        - name: 3. Deploy Previous Docker Container Version ({{ rollback_tag }})
+          community.docker.docker_container:
+            name: "{{ container_name }}"
+            image: "{{ image_name }}:{{ rollback_tag }}"
+            state: started
+            restart_policy: always
+            published_ports:
+              - "{{ app_port }}:80"
+
+        - name: 4. Health Check - Verify Reverted Container Endpoint
+          ansible.builtin.uri:
+            url: "http://localhost:{{ app_port }}"
+            status_code: 200
+          register: health_check_result
+          until: health_check_result.status == 200
+          retries: 5
+          delay: 3
+
+        - name: 5. Re-add Host to Load Balancer Pool
+          ansible.builtin.debug:
+            msg: "Rollback SUCCESSFUL! Re-adding {{ inventory_hostname }} with image {{ image_name }}:{{ rollback_tag }} back to pool."
+
+      rescue:
+        - name: Handle Rollback Failure
+          ansible.builtin.fail:
+            msg: "CRITICAL: Rollback failed on {{ inventory_hostname }}! Host kept isolated from Load Balancer."

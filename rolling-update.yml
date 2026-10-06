@@ -1,0 +1,54 @@
+---
+- name: Build Docker Image Locally
+  hosts: localhost
+  connection: local
+  vars:
+    image_name: "my-app"
+    image_tag: "v2"
+
+  tasks:
+    - name: Build Updated Docker Image
+      community.docker.docker_image:
+        name: "{{ image_name }}"
+        tag: "{{ image_tag }}"
+        build:
+          path: "{{ playbook_dir }}"
+        source: build
+
+- name: Rolling Update Container Deployment
+  hosts: webservers
+  become: true
+  serial: 1
+  vars:
+    image_name: "my-app"
+    image_tag: "v2"
+    container_name: "my-app-container"
+    app_port: 8080
+
+  tasks:
+    - name: Stop and Remove Existing Container
+      community.docker.docker_container:
+        name: "{{ container_name }}"
+        state: absent
+
+    - name: Deploy Updated Docker Container
+      community.docker.docker_container:
+        name: "{{ container_name }}"
+        image: "{{ image_name }}:{{ image_tag }}"
+        state: started
+        restart_policy: always
+        published_ports:
+          - "{{ app_port }}:80"
+
+    - name: Health Check - Verify Container Endpoint
+      ansible.builtin.uri:
+        url: "http://localhost:{{ app_port }}"
+        status_code: 200
+      register: health_check_result
+      until: health_check_result.status == 200
+      retries: 5
+      delay: 3
+
+    - name: Display Health Check Success
+      ansible.builtin.debug:
+        msg: "Host {{ inventory_hostname }} passed health check successfully!"
