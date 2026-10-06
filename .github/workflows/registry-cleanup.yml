@@ -1,0 +1,32 @@
+name: Clean Up Old GHCR Development Images
+
+on:
+  schedule:
+    # Har Sunday raat 00:00 UTC par auto-run hoga
+    - cron: '0 0 * * 0'
+  workflow_dispatch: # GitHub UI se manually run karne ke liye
+
+jobs:
+  clean-ghcr-dev-tags:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+
+    steps:
+      - name: Delete development and feature branch tags older than 30 days
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: 'my-app'
+          package-type: 'container'
+          min-versions-to-keep: 3
+          # Development tags pattern (sha, dev, feature, PR branches)
+          ignore-versions: '^v[0-9]+\.[0-9]+\.[0-9]+.*|^latest$'
+          # 30 days old versions match regex
+          delete-only-untagged: false
+
+      - name: Purge untagged dangling images
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: 'my-app'
+          package-type: 'container'
+          delete-only-untagged: true
