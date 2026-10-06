@@ -2,6 +2,10 @@ name: Build and Push Multi-Arch Docker Image to GHCR
 
 on:
   push:
+name: Build and Push Multi-Arch Docker Image to GHCR
+
+on:
+  push:
     branches:
       - main
       - develop
@@ -58,3 +62,4 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
