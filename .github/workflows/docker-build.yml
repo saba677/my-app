@@ -1,34 +1,42 @@
-name: Build and Push Multi-Arch Docker Image to GHCR
-
-on:
-  push:
-name: Build and Push Multi-Arch Docker Image to GHCR
+name: Build, Tag and Push Multi-Arch Docker Image to GHCR
 
 on:
   push:
     branches:
       - main
       - develop
-    tags:
-      - 'v*.*.*'
-  pull_request:
-    branches:
-      - main
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-and-push:
+  release-and-build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Calculate Next Version Tag
+        id: tagger
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: patch
+
+      - name: Create GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.tagger.outputs.new_tag }}
+          name: Release ${{ steps.tagger.outputs.new_tag }}
+          body: ${{ steps.tagger.outputs.changelog }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up QEMU (for arm64 emulation)
         uses: docker/setup-qemu-action@v3
@@ -50,8 +58,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            type=ref,event=branch
-            type=semver,pattern={{version}}
+            type=raw,value=${{ steps.tagger.outputs.new_tag }}
             type=sha,prefix=sha-,format=short
 
       - name: Build and push multi-arch Docker image
@@ -59,7 +66,6 @@ jobs:
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-
