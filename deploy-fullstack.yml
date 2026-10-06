@@ -1,0 +1,49 @@
+- name: Deploy Full-Stack Web Application
+  hosts: app_servers
+  become: true
+  tasks:
+    - name: Login to GHCR
+      community.docker.docker_login:
+        registry: ghcr.io
+        username: "{{ ghcr_user }}"
+        password: "{{ ghcr_token }}"
+
+    - name: Deploy Database Container
+      community.docker.docker_container:
+        name: postgres-db
+        image: postgres:15-alpine
+        state: started
+        restart_policy: always
+        env:
+          POSTGRES_DB: appdb
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+
+    - name: Deploy Backend Container
+      community.docker.docker_container:
+        name: backend-app
+        image: ghcr.io/saba677/my-app-backend:latest
+        state: started
+        restart_policy: always
+        recreate: true
+        ports:
+          - "5000:5000"
+
+    - name: Deploy Frontend Container
+      community.docker.docker_container:
+        name: frontend-app
+        image: ghcr.io/saba677/my-app-frontend:latest
+        state: started
+        restart_policy: always
+        recreate: true
+        ports:
+          - "80:80"
+
+    - name: Verify Health Endpoint
+      uri:
+        url: "http://localhost/health"
+        status_code: 200
+      register: result
+      until: result.status == 200
+      retries: 5
+      delay: 5
