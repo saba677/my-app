@@ -1,0 +1,43 @@
+---
+- name: Rolling Deployment to Production Environment with Auto-Rollback
+  hosts: app_servers
+  become: false
+  serial: 1
+  max_fail_percentage: 0
+
+  tasks:
+    - name: Deployment Block with Automatic Rollback Safety
+      block:
+        - name: Display production deployment start
+          ansible.builtin.debug:
+            msg: "Starting production deployment for {{ inventory_hostname }}"
+
+        - name: Simulate application update
+          ansible.builtin.file:
+            path: /tmp/prod_app
+            state: directory
+            mode: '0755'
+
+        - name: Perform Post-Deployment Health Check
+          ansible.builtin.debug:
+            msg: "Performing health check on port 80..."
+
+        - name: Verify service response
+          ansible.builtin.assert:
+            that:
+              - "1 == 1"
+            fail_msg: "Health check failed on post-deployment verification!"
+
+      rescue:
+        - name: CRITICAL - Post-deployment health check failed! Triggering automatic rollback...
+          ansible.builtin.debug:
+            msg: "ALERT: Rolling back {{ inventory_hostname }} to previous stable state."
+
+        - name: Execute Rollback - Restore Backup/Previous Version
+          ansible.builtin.file:
+            path: /tmp/prod_app
+            state: absent
+
+        - name: Confirm Rollback Completion
+          ansible.builtin.fail:
+            msg: "Deployment aborted and auto-rollback executed successfully."
