@@ -1,0 +1,1 @@
+cp ~/inventory.ini ~/deploy-staging.yml .
